@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import joblib
-import matplotlib.pyplot as plt
 
 # ===============================
 # Load Data
@@ -36,7 +35,7 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:, :x.size(1)]
 
 # ===============================
-# Transformer Model (MATCH TRAINING)
+# Model
 # ===============================
 class TransformerModel(nn.Module):
     def __init__(self, input_dim, d_model=128, nhead=8, num_layers=3):
@@ -54,7 +53,6 @@ class TransformerModel(nn.Module):
         )
 
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-
         self.norm = nn.LayerNorm(d_model)
 
         self.fc = nn.Sequential(
@@ -75,23 +73,17 @@ class TransformerModel(nn.Module):
 # ===============================
 # Load Model
 # ===============================
-input_dim = X_scaler.mean_.shape[0]
+input_dim = X_scaler.n_features_in_
 
 model = TransformerModel(input_dim)
-model.load_state_dict(torch.load("transformer_model.pth", map_location=torch.device("cpu")))
+model.load_state_dict(torch.load("transformer_model.pth", map_location="cpu"))
 model.eval()
 
 # ===============================
-# Sidebar Navigation
+# Sidebar
 # ===============================
 st.sidebar.title("🚲 Bike Demand App")
-page = st.sidebar.radio("Go to", [
-    "Dashboard",
-    "Prediction",
-    "Model Performance",
-    "Dataset",
-    "About"
-])
+page = st.sidebar.radio("Go to", ["Dashboard", "Prediction", "About"])
 
 # ===============================
 # Dashboard
@@ -99,52 +91,62 @@ page = st.sidebar.radio("Go to", [
 if page == "Dashboard":
     st.title("📊 Bike Demand Dashboard")
 
-    st.subheader("Average Demand by Hour")
-    hourly = df.groupby("hr")["cnt"].mean()
-    st.line_chart(hourly)
+    if "hr" in df.columns:
+        st.line_chart(df.groupby("hr")["cnt"].mean())
 
-    st.subheader("Demand by Season")
-    season = df.groupby("season")["cnt"].mean()
-    st.bar_chart(season)
+    if "season" in df.columns:
+        st.bar_chart(df.groupby("season")["cnt"].mean())
 
-    st.subheader("Demand by Weather")
-    weather = df.groupby("weathersit")["cnt"].mean()
-    st.bar_chart(weather)
+    if "weathersit" in df.columns:
+        st.bar_chart(df.groupby("weathersit")["cnt"].mean())
 
 # ===============================
-# Prediction
+# Prediction (PERFECT VERSION)
 # ===============================
 elif page == "Prediction":
     st.title("🔮 Bike Demand Prediction")
 
-    temp = st.slider("Temperature (normalized)", 0.0, 1.0, 0.5)
-    humidity = st.slider("Humidity (normalized)", 0.0, 1.0, 0.5)
-    windspeed = st.slider("Windspeed (normalized)", 0.0, 1.0, 0.2)
+    # Inputs
+    season = st.selectbox("Season", [1,2,3,4])
+    yr = st.selectbox("Year (0=2011,1=2012)", [0,1])
+    mnth = st.slider("Month", 1, 12, 6)
+    holiday = st.selectbox("Holiday", [0,1])
+    workingday = st.selectbox("Working Day", [0,1])
+    weathersit = st.selectbox("Weather", [1,2,3,4])
+
+    temp = st.slider("Temperature", 0.0, 1.0, 0.5)
+    atemp = st.slider("Feels Like Temp", 0.0, 1.0, 0.5)
+    hum = st.slider("Humidity", 0.0, 1.0, 0.5)
+    windspeed = st.slider("Windspeed", 0.0, 1.0, 0.2)
+
     hour = st.slider("Hour", 0, 23, 12)
-    weekday = st.slider("Weekday (0=Sun)", 0, 6, 3)
+    weekday = st.slider("Weekday", 0, 6, 3)
 
     if st.button("Predict"):
-        # Feature engineering (same as training)
-        hour_sin = np.sin(2 * np.pi * hour / 24)
-        hour_cos = np.cos(2 * np.pi * hour / 24)
 
-        weekday_sin = np.sin(2 * np.pi * weekday / 7)
-        weekday_cos = np.cos(2 * np.pi * weekday / 7)
+        # Cyclical features
+        hour_sin = np.sin(2*np.pi*hour/24)
+        hour_cos = np.cos(2*np.pi*hour/24)
 
-        features = np.array([[temp, humidity, windspeed,
-                              hour_sin, hour_cos,
-                              weekday_sin, weekday_cos]])
+        weekday_sin = np.sin(2*np.pi*weekday/7)
+        weekday_cos = np.cos(2*np.pi*weekday/7)
+
+        # FULL feature vector (must match training)
+        features = np.array([[
+            season, yr, mnth, holiday, workingday, weathersit,
+            temp, atemp, hum, windspeed,
+            hour_sin, hour_cos, weekday_sin, weekday_cos
+        ]])
 
         # Scale
         input_scaled = X_scaler.transform(features)
 
-        # Create sequence (24 timesteps)
+        # Sequence
         seq = np.repeat(input_scaled, 24, axis=0)
         seq = seq.reshape(1, 24, -1)
 
         input_tensor = torch.tensor(seq, dtype=torch.float32)
 
-        # Predict
         with torch.no_grad():
             pred = model(input_tensor).numpy()
 
@@ -152,42 +154,21 @@ elif page == "Prediction":
 
         st.success(f"Predicted Bike Demand: {pred_original:.2f}")
 
-        # Simple interpretation
         if pred_original < 100:
-            st.error("⚠️ Low bike availability")
+            st.error("⚠️ Low Availability")
         else:
-            st.success("✅ Good bike availability")
-
-# ===============================
-# Model Performance
-# ===============================
-elif page == "Model Performance":
-    st.title("📈 Model Performance")
-
-    st.write("Transformer Model Results:")
-    st.write("- R² Score: 0.92")
-    st.write("- RMSE: ~60")
-    st.write("- MAE: ~42")
-
-# ===============================
-# Dataset Viewer
-# ===============================
-elif page == "Dataset":
-    st.title("📂 Dataset Viewer")
-    st.dataframe(df.head(100))
+            st.success("✅ Good Availability")
 
 # ===============================
 # About
 # ===============================
 elif page == "About":
-    st.title("ℹ️ About Project")
+    st.title("ℹ️ About")
 
     st.markdown("""
-    ### Bike Demand Prediction System
+    - Transformer-based Time Series Model  
+    - Sequence Length: 24 hours  
+    - R² Score: ~0.92  
 
-    - Model: Transformer (Deep Learning)
-    - Sequence Length: 24 hours
-    - R² Score: ~0.92
-
-    This application predicts bike demand using temporal and environmental features.
+    This app predicts bike demand using weather and time features.
     """)
