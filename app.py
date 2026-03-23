@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import joblib
-import matplotlib.pyplot as plt
 
 # ===============================
 # PAGE CONFIG
@@ -86,6 +85,7 @@ model.eval()
 st.sidebar.title("🚲 Bike Demand App")
 page = st.sidebar.radio("Navigation", [
     "Dashboard",
+    "Data Insights",
     "Prediction",
     "Dataset Explorer",
     "Model Performance",
@@ -93,55 +93,67 @@ page = st.sidebar.radio("Navigation", [
 ])
 
 # ===============================
-# DASHBOARD
+# DASHBOARD (WELCOME)
 # ===============================
 if page == "Dashboard":
 
-    st.title("🚲 Bike Demand Analytics Dashboard")
+    st.title("🚲 Bike Demand Prediction System")
 
     st.markdown("""
-    Welcome to the **Bike Demand Prediction System** 🚀  
-    This app helps analyze and predict bike rental demand based on time, weather, and seasonal factors.
+    ### 👋 Welcome!
+
+    This application helps analyze and predict bike rental demand using a Transformer-based model.
+
+    ### 🔍 What you can do:
+    - 📊 Explore trends in **Data Insights**
+    - 🔮 Predict demand using real-world inputs
+    - 📈 View model performance
+    - 📂 Explore dataset
+
+    ---
+    👉 Use the sidebar to navigate.
     """)
 
-    # KPIs
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Rides", f"{int(df['cnt'].sum()):,}")
-    col2.metric("Average Demand", f"{int(df['cnt'].mean())}")
-    col3.metric("Peak Demand", f"{int(df['cnt'].max())}")
+# ===============================
+# DATA INSIGHTS (GRAPHS)
+# ===============================
+elif page == "Data Insights":
 
-    st.markdown("---")
+    st.title("📊 Data Insights")
 
-    # Hourly Graph
+    # Hourly Demand
     if "hr" in df.columns:
+        st.subheader("⏰ Demand by Hour")
+
         hourly = df.groupby("hr")["cnt"].mean()
 
-        fig, ax = plt.subplots()
-        ax.plot(hourly.index, hourly.values)
-        ax.set_xlabel("Hour of Day")
-        ax.set_ylabel("Average Demand")
-        ax.set_title("Hourly Bike Demand")
+        chart_data = pd.DataFrame({
+            "Hour": hourly.index,
+            "Average Demand": hourly.values
+        })
 
-        st.pyplot(fig)
-        st.info(f"Peak demand occurs around {hourly.idxmax()}:00")
+        st.line_chart(chart_data.set_index("Hour"))
 
-    # Season Graph
+    # Season Demand
     if "season" in df.columns:
+        st.subheader("🌤️ Demand by Season")
+
         season_map = {1:"Spring", 2:"Summer", 3:"Fall", 4:"Winter"}
         df["season_name"] = df["season"].map(season_map)
 
         season_data = df.groupby("season_name")["cnt"].mean()
 
-        fig, ax = plt.subplots()
-        ax.bar(season_data.index, season_data.values)
-        ax.set_xlabel("Season")
-        ax.set_ylabel("Average Demand")
-        ax.set_title("Demand by Season")
+        chart_data = pd.DataFrame({
+            "Season": season_data.index,
+            "Average Demand": season_data.values
+        })
 
-        st.pyplot(fig)
+        st.bar_chart(chart_data.set_index("Season"))
 
-    # Weather Graph
+    # Weather Impact
     if "weathersit" in df.columns:
+        st.subheader("🌦️ Weather Impact")
+
         weather_map = {
             1: "Clear",
             2: "Mist",
@@ -150,15 +162,15 @@ if page == "Dashboard":
         }
 
         df["weather_name"] = df["weathersit"].map(weather_map)
+
         weather_data = df.groupby("weather_name")["cnt"].mean()
 
-        fig, ax = plt.subplots()
-        ax.bar(weather_data.index, weather_data.values)
-        ax.set_xlabel("Weather Condition")
-        ax.set_ylabel("Average Demand")
-        ax.set_title("Weather Impact")
+        chart_data = pd.DataFrame({
+            "Weather": weather_data.index,
+            "Average Demand": weather_data.values
+        })
 
-        st.pyplot(fig)
+        st.bar_chart(chart_data.set_index("Weather"))
 
 # ===============================
 # PREDICTION
@@ -167,7 +179,7 @@ elif page == "Prediction":
 
     st.title("🔮 Predict Bike Demand")
 
-    # Dictionaries
+    # Friendly mappings
     season_dict = {"Spring":1, "Summer":2, "Fall":3, "Winter":4}
     weather_dict = {"Clear":1, "Mist":2, "Light Rain/Snow":3, "Heavy Rain":4}
     year_dict = {"2011":0, "2012":1}
@@ -181,21 +193,26 @@ elif page == "Prediction":
         mnth = st.slider("Month", 1, 12, 6)
         holiday = binary_dict[st.selectbox("Holiday", list(binary_dict.keys()))]
         workingday = binary_dict[st.selectbox("Working Day", list(binary_dict.keys()))]
-        weathersit = weather_dict[st.selectbox("Weather", list(weather_dict.keys()))]
+        weathersit = weather_dict[st.selectbox("Weather Condition", list(weather_dict.keys()))]
 
     with col2:
-        temp = st.slider("Temperature", 0.0, 1.0, 0.5)
-        atemp = st.slider("Feels Like Temp", 0.0, 1.0, 0.5)
-        hum = st.slider("Humidity", 0.0, 1.0, 0.5)
-        windspeed = st.slider("Windspeed", 0.0, 1.0, 0.2)
+        temp_c = st.slider("Temperature (°C)", 0, 50, 25)
+        hum_percent = st.slider("Humidity (%)", 0, 100, 50)
+        wind_kmh = st.slider("Windspeed (km/h)", 0, 50, 10)
         hour = st.slider("Hour", 0, 23, 12)
         weekday = st.slider("Weekday (0=Sun)", 0, 6, 3)
 
     if st.button("🚀 Predict Demand"):
 
+        # Convert to normalized
+        temp = temp_c / 50
+        atemp = temp
+        hum = hum_percent / 100
+        windspeed = wind_kmh / 50
+
+        # Cyclical
         hour_sin = np.sin(2*np.pi*hour/24)
         hour_cos = np.cos(2*np.pi*hour/24)
-
         weekday_sin = np.sin(2*np.pi*weekday/7)
         weekday_cos = np.cos(2*np.pi*weekday/7)
 
@@ -231,31 +248,23 @@ elif page == "Dataset Explorer":
     st.title("📂 Dataset Explorer")
     st.dataframe(df.head(100))
     st.write("Shape:", df.shape)
-    st.write("Columns:", list(df.columns))
 
 # ===============================
 # PERFORMANCE
 # ===============================
 elif page == "Model Performance":
     st.title("📈 Model Performance")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("R² Score", "0.92")
-    col2.metric("RMSE", "~60")
-    col3.metric("MAE", "~42")
+    st.metric("R² Score", "0.92")
+    st.metric("RMSE", "~60")
+    st.metric("MAE", "~42")
 
 # ===============================
 # ABOUT
 # ===============================
 elif page == "About":
-    st.title("ℹ️ About Project")
-
+    st.title("ℹ️ About")
     st.markdown("""
-    This project uses a **Transformer-based deep learning model**
-    to predict bike demand using time-series data.
-
-    Key highlights:
-    - Captures temporal patterns
-    - Uses cyclical feature encoding
-    - Achieves high accuracy (R² ≈ 0.92)
+    Transformer-based model for time-series prediction  
+    Captures temporal patterns using past 24-hour data  
+    Achieves high accuracy (R² ≈ 0.92)
     """)
