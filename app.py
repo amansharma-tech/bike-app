@@ -93,7 +93,7 @@ page = st.sidebar.radio("Navigation", [
 ])
 
 # ===============================
-# DASHBOARD
+# DASHBOARD (WELCOME)
 # ===============================
 if page == "Dashboard":
 
@@ -115,12 +115,13 @@ if page == "Dashboard":
     """)
 
 # ===============================
-# DATA INSIGHTS
+# DATA INSIGHTS (GRAPHS)
 # ===============================
 elif page == "Data Insights":
 
     st.title("📊 Data Insights")
 
+    # Hourly Demand
     if "hr" in df.columns:
         st.subheader("⏰ Demand by Hour")
 
@@ -132,9 +133,8 @@ elif page == "Data Insights":
         })
 
         st.line_chart(chart_data.set_index("Hour"))
-    else:
-        st.warning("⚠️ 'hr' column not found in dataset")
 
+    # Season Demand
     if "season" in df.columns:
         st.subheader("🌤️ Demand by Season")
 
@@ -150,6 +150,7 @@ elif page == "Data Insights":
 
         st.bar_chart(chart_data.set_index("Season"))
 
+    # Weather Impact
     if "weathersit" in df.columns:
         st.subheader("🌦️ Weather Impact")
 
@@ -178,6 +179,7 @@ elif page == "Prediction":
 
     st.title("🔮 Predict Bike Demand")
 
+    # Friendly mappings
     season_dict = {"Spring":1, "Summer":2, "Fall":3, "Winter":4}
     weather_dict = {"Clear":1, "Mist":2, "Light Rain/Snow":3, "Heavy Rain":4}
     year_dict = {"2011":0, "2012":1}
@@ -202,11 +204,13 @@ elif page == "Prediction":
 
     if st.button("🚀 Predict Demand"):
 
+        # Convert to normalized
         temp = temp_c / 50
         atemp = temp
         hum = hum_percent / 100
         windspeed = wind_kmh / 50
 
+        # Cyclical
         hour_sin = np.sin(2*np.pi*hour/24)
         hour_cos = np.cos(2*np.pi*hour/24)
         weekday_sin = np.sin(2*np.pi*weekday/7)
@@ -232,36 +236,10 @@ elif page == "Prediction":
 
         st.success(f"🚲 Predicted Demand: {pred_original:.2f}")
 
-        # Smart Warning
-        if pred_original > 700:
-            st.error("🚨 Peak Demand! Bikes may not be available.")
-        elif pred_original > 300:
-            st.warning("⚠️ Moderate Demand — plan accordingly.")
+        if pred_original < 100:
+            st.error("Low Bike Availability ⚠️")
         else:
-            st.success("✅ Low Demand — good time to rent!")
-
-        # Best Hour Suggestion (SAFE)
-        if "hr" in df.columns:
-            hourly = df.groupby("hr")["cnt"].mean()
-            best_hour = hourly.idxmin()
-            st.info(f"💡 Best hour to rent bike: {best_hour}:00")
-
-        # Download Report
-        report_df = pd.DataFrame({
-            "Feature": ["Season","Year","Month","Holiday","Working Day",
-                        "Weather","Temperature","Humidity","Windspeed",
-                        "Hour","Weekday","Predicted Demand"],
-            "Value": [season, yr, mnth, holiday, workingday,
-                      weathersit, temp_c, hum_percent, wind_kmh,
-                      hour, weekday, pred_original]
-        })
-
-        st.download_button(
-            "📥 Download Report",
-            report_df.to_csv(index=False),
-            "prediction_report.csv",
-            "text/csv"
-        )
+            st.success("Good Bike Availability ✅")
 
 # ===============================
 # DATASET
