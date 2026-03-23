@@ -123,16 +123,21 @@ elif page == "Data Insights":
 
     if "hr" in df.columns:
         st.subheader("⏰ Demand by Hour")
+
         hourly = df.groupby("hr")["cnt"].mean()
 
         chart_data = pd.DataFrame({
             "Hour": hourly.index,
             "Average Demand": hourly.values
         })
+
         st.line_chart(chart_data.set_index("Hour"))
+    else:
+        st.warning("⚠️ 'hr' column not found in dataset")
 
     if "season" in df.columns:
         st.subheader("🌤️ Demand by Season")
+
         season_map = {1:"Spring", 2:"Summer", 3:"Fall", 4:"Winter"}
         df["season_name"] = df["season"].map(season_map)
 
@@ -142,10 +147,12 @@ elif page == "Data Insights":
             "Season": season_data.index,
             "Average Demand": season_data.values
         })
+
         st.bar_chart(chart_data.set_index("Season"))
 
     if "weathersit" in df.columns:
         st.subheader("🌦️ Weather Impact")
+
         weather_map = {
             1: "Clear",
             2: "Mist",
@@ -161,10 +168,11 @@ elif page == "Data Insights":
             "Weather": weather_data.index,
             "Average Demand": weather_data.values
         })
+
         st.bar_chart(chart_data.set_index("Weather"))
 
 # ===============================
-# PREDICTION (SMART VERSION)
+# PREDICTION
 # ===============================
 elif page == "Prediction":
 
@@ -224,7 +232,7 @@ elif page == "Prediction":
 
         st.success(f"🚲 Predicted Demand: {pred_original:.2f}")
 
-        # 🚨 Peak Warning
+        # Smart Warning
         if pred_original > 700:
             st.error("🚨 Peak Demand! Bikes may not be available.")
         elif pred_original > 300:
@@ -232,12 +240,13 @@ elif page == "Prediction":
         else:
             st.success("✅ Low Demand — good time to rent!")
 
-        # 🧠 Best Hour Suggestion
-        hourly = df.groupby("hr")["cnt"].mean()
-        best_hour = hourly.idxmin()
-        st.info(f"💡 Best hour to rent bike: {best_hour}:00")
+        # Best Hour Suggestion (SAFE)
+        if "hr" in df.columns:
+            hourly = df.groupby("hr")["cnt"].mean()
+            best_hour = hourly.idxmin()
+            st.info(f"💡 Best hour to rent bike: {best_hour}:00")
 
-        # 📄 Download Report
+        # Download Report
         report_df = pd.DataFrame({
             "Feature": ["Season","Year","Month","Holiday","Working Day",
                         "Weather","Temperature","Humidity","Windspeed",
