@@ -93,7 +93,7 @@ page = st.sidebar.radio("Navigation", [
 ])
 
 # ===============================
-# DASHBOARD (WELCOME)
+# DASHBOARD
 # ===============================
 if page == "Dashboard":
 
@@ -115,29 +115,24 @@ if page == "Dashboard":
     """)
 
 # ===============================
-# DATA INSIGHTS (GRAPHS)
+# DATA INSIGHTS
 # ===============================
 elif page == "Data Insights":
 
     st.title("📊 Data Insights")
 
-    # Hourly Demand
     if "hr" in df.columns:
         st.subheader("⏰ Demand by Hour")
-
         hourly = df.groupby("hr")["cnt"].mean()
 
         chart_data = pd.DataFrame({
             "Hour": hourly.index,
             "Average Demand": hourly.values
         })
-
         st.line_chart(chart_data.set_index("Hour"))
 
-    # Season Demand
     if "season" in df.columns:
         st.subheader("🌤️ Demand by Season")
-
         season_map = {1:"Spring", 2:"Summer", 3:"Fall", 4:"Winter"}
         df["season_name"] = df["season"].map(season_map)
 
@@ -147,13 +142,10 @@ elif page == "Data Insights":
             "Season": season_data.index,
             "Average Demand": season_data.values
         })
-
         st.bar_chart(chart_data.set_index("Season"))
 
-    # Weather Impact
     if "weathersit" in df.columns:
         st.subheader("🌦️ Weather Impact")
-
         weather_map = {
             1: "Clear",
             2: "Mist",
@@ -169,97 +161,99 @@ elif page == "Data Insights":
             "Weather": weather_data.index,
             "Average Demand": weather_data.values
         })
-
         st.bar_chart(chart_data.set_index("Weather"))
 
 # ===============================
-# PREDICTION
+# PREDICTION (SMART VERSION)
 # ===============================
 elif page == "Prediction":
 
-     st.button("🚀 Predict Demand"):
+    st.title("🔮 Predict Bike Demand")
 
-    # Convert to normalized
-    temp = temp_c / 50
-    atemp = temp
-    hum = hum_percent / 100
-    windspeed = wind_kmh / 50
+    season_dict = {"Spring":1, "Summer":2, "Fall":3, "Winter":4}
+    weather_dict = {"Clear":1, "Mist":2, "Light Rain/Snow":3, "Heavy Rain":4}
+    year_dict = {"2011":0, "2012":1}
+    binary_dict = {"No":0, "Yes":1}
 
-    # Cyclical encoding
-    hour_sin = np.sin(2*np.pi*hour/24)
-    hour_cos = np.cos(2*np.pi*hour/24)
-    weekday_sin = np.sin(2*np.pi*weekday/7)
-    weekday_cos = np.cos(2*np.pi*weekday/7)
+    col1, col2 = st.columns(2)
 
-    features = np.array([[
-        season, yr, mnth, holiday, workingday, weathersit,
-        temp, atemp, hum, windspeed,
-        hour_sin, hour_cos, weekday_sin, weekday_cos
-    ]])
+    with col1:
+        season = season_dict[st.selectbox("Season", list(season_dict.keys()))]
+        yr = year_dict[st.selectbox("Year", list(year_dict.keys()))]
+        mnth = st.slider("Month", 1, 12, 6)
+        holiday = binary_dict[st.selectbox("Holiday", list(binary_dict.keys()))]
+        workingday = binary_dict[st.selectbox("Working Day", list(binary_dict.keys()))]
+        weathersit = weather_dict[st.selectbox("Weather Condition", list(weather_dict.keys()))]
 
-    input_scaled = X_scaler.transform(features)
+    with col2:
+        temp_c = st.slider("Temperature (°C)", 0, 50, 25)
+        hum_percent = st.slider("Humidity (%)", 0, 100, 50)
+        wind_kmh = st.slider("Windspeed (km/h)", 0, 50, 10)
+        hour = st.slider("Hour", 0, 23, 12)
+        weekday = st.slider("Weekday (0=Sun)", 0, 6, 3)
 
-    seq = np.repeat(input_scaled, 24, axis=0)
-    seq = seq.reshape(1, 24, -1)
+    if st.button("🚀 Predict Demand"):
 
-    input_tensor = torch.tensor(seq, dtype=torch.float32)
+        temp = temp_c / 50
+        atemp = temp
+        hum = hum_percent / 100
+        windspeed = wind_kmh / 50
 
-    with torch.no_grad():
-        pred = model(input_tensor).numpy()
+        hour_sin = np.sin(2*np.pi*hour/24)
+        hour_cos = np.cos(2*np.pi*hour/24)
+        weekday_sin = np.sin(2*np.pi*weekday/7)
+        weekday_cos = np.cos(2*np.pi*weekday/7)
 
-    pred_original = y_scaler.inverse_transform(pred.reshape(-1,1))[0][0]
+        features = np.array([[
+            season, yr, mnth, holiday, workingday, weathersit,
+            temp, atemp, hum, windspeed,
+            hour_sin, hour_cos, weekday_sin, weekday_cos
+        ]])
 
-    # ===============================
-    # RESULT
-    # ===============================
-    st.success(f"🚲 Predicted Demand: {pred_original:.2f}")
+        input_scaled = X_scaler.transform(features)
 
-    # ===============================
-    # PEAK WARNING SYSTEM
-    # ===============================
-    if pred_original > 700:
-        st.error("🚨 Peak Demand! Bikes may not be available.")
-    elif pred_original > 300:
-        st.warning("⚠️ Moderate Demand — plan accordingly.")
-    else:
-        st.success("✅ Low Demand — good time to rent!")
+        seq = np.repeat(input_scaled, 24, axis=0)
+        seq = seq.reshape(1, 24, -1)
 
-    # ===============================
-    # BEST HOUR SUGGESTION
-    # ===============================
-    st.subheader("🧠 Best Time Suggestion")
+        input_tensor = torch.tensor(seq, dtype=torch.float32)
 
-    hourly = df.groupby("hr")["cnt"].mean()
-    best_hour = hourly.idxmin()
+        with torch.no_grad():
+            pred = model(input_tensor).numpy()
 
-    st.info(f"💡 Best hour to rent bike: {best_hour}:00 (lowest demand)")
+        pred_original = y_scaler.inverse_transform(pred.reshape(-1,1))[0][0]
 
-    # ===============================
-    # DOWNLOAD REPORT
-    # ===============================
-    st.subheader("📄 Download Report")
+        st.success(f"🚲 Predicted Demand: {pred_original:.2f}")
 
-    report_df = pd.DataFrame({
-        "Feature": [
-            "Season", "Year", "Month", "Holiday", "Working Day",
-            "Weather", "Temperature", "Humidity", "Windspeed",
-            "Hour", "Weekday", "Predicted Demand"
-        ],
-        "Value": [
-            season, yr, mnth, holiday, workingday,
-            weathersit, temp_c, hum_percent, wind_kmh,
-            hour, weekday, pred_original
-        ]
-    })
+        # 🚨 Peak Warning
+        if pred_original > 700:
+            st.error("🚨 Peak Demand! Bikes may not be available.")
+        elif pred_original > 300:
+            st.warning("⚠️ Moderate Demand — plan accordingly.")
+        else:
+            st.success("✅ Low Demand — good time to rent!")
 
-    csv = report_df.to_csv(index=False)
+        # 🧠 Best Hour Suggestion
+        hourly = df.groupby("hr")["cnt"].mean()
+        best_hour = hourly.idxmin()
+        st.info(f"💡 Best hour to rent bike: {best_hour}:00")
 
-    st.download_button(
-        label="📥 Download Prediction Report",
-        data=csv,
-        file_name="bike_prediction_report.csv",
-        mime="text/csv"
-    )
+        # 📄 Download Report
+        report_df = pd.DataFrame({
+            "Feature": ["Season","Year","Month","Holiday","Working Day",
+                        "Weather","Temperature","Humidity","Windspeed",
+                        "Hour","Weekday","Predicted Demand"],
+            "Value": [season, yr, mnth, holiday, workingday,
+                      weathersit, temp_c, hum_percent, wind_kmh,
+                      hour, weekday, pred_original]
+        })
+
+        st.download_button(
+            "📥 Download Report",
+            report_df.to_csv(index=False),
+            "prediction_report.csv",
+            "text/csv"
+        )
+
 # ===============================
 # DATASET
 # ===============================
